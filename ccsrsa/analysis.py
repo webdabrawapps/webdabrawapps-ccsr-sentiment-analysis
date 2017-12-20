@@ -4,10 +4,12 @@ import nltk
 import json
 import numpy as np
 import logging
+import functools
 
 from datetime import datetime
 from textblob import TextBlob
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from pprint import pprint
 from constants import *
 
 vader_analyzer = SentimentIntensityAnalyzer()
@@ -24,22 +26,25 @@ def main():
     subreddit = reddit.subreddit(ccsr)
     subreddit_polarities[subreddit] = analyze_subreddit(subreddit)
 
-  logging.info(subreddit_polarities)
+  pprint(subreddit_polarities)
+
+def _get_submission_ranking(sbm):
+  if not sbm.score:
+    return 0
+  epoch = datetime(2009, 1, 3, 12, 0, 0) # Bitcoin creation date!
+  score_factor = np.log10(max(1, abs(sbm.score)))
+  time_factor = (1 + 1e-7) ** (datetime.fromtimestamp(sbm.created) - epoch).total_seconds() / 1e11
+  return score_factor + time_factor
+
+def _get_comment_ranking(cmt):
+  return cmt.score
 
 def analyze_subreddit(subreddit):
 
   polarity = 0
-  epoch = datetime(2009, 1, 3, 12, 0, 0)
-
-  def submission_ranking(sbm):
-    if not sbm.score:
-      return 0
-    score_factor = np.log10(max(1, abs(sbm.score)))
-    time_factor = (1 + 1e-7) ** (datetime.fromtimestamp(sbm.created) - epoch).total_seconds() / 1e11
-    return score_factor + time_factor
 
   top_submissions = subreddit.hot(limit=NUM_SUBMISSIONS_TO_CONSIDER)
-  top_submission_rankings = {sbm : submission_ranking(sbm) for sbm in top_submissions}
+  top_submission_rankings = {sbm : _get_submission_ranking(sbm) for sbm in top_submissions}
   ranking_sum = sum(top_submission_rankings.values())
 
   for submission, submission_ranking in top_submission_rankings.items():
@@ -54,20 +59,43 @@ def analyze_subreddit(subreddit):
 def analyze_submission(submission):
   polarity = SUBMISSION_TITLE_WEIGHT * analyze_sentence(submission.title)
 
-  aggregate_comment_score = 0
   submission.comments.replace_more(limit=0)
   top_level_comments = submission.comments.list()
-  for comment in top_level_comments:
-    scaling_factor = 1.0 / len(top_level_comments)
-    aggregate_comment_score += scaling_factor * analyze_comment(comment)
+  top_level_comment_rankings = {cmt: _get_comment_ranking(cmt) for cmt in top_level_comments}
+  ranking_sum = sum(top_level_comment_rankings.values())
+  aggregate_comment_score = 0
+
+  for comment, comment_ranking in top_level_comment_rankings.items():
+    comment_scaling_factor = comment_ranking / ranking_sum
+    aggregate_comment_score += comment_scaling_factor * analyze_comment(comment)
+
   polarity += SUBMISSION_COMMENTS_WEIGHT * aggregate_comment_score
 
   return polarity
 
 def analyze_comment(comment):
   polarity = analyze_sentence(comment.body)
+
+  if comment.replies:
+
+    comment.replies.replace_more(limit=0)
+    replies = comment.replies.list()
+    reply_rankings = {cmt: _get_comment_ranking(cmt) for cmt in replies}
+    ranking_sum = sum(reply_rankings.values())
+    aggregate_reply_score = 0
+
+    if ranking_sum:
+      polarity *= COMMENT_BODY_WEIGHT
+
+      for reply, reply_ranking in reply_rankings.items():
+        reply_scaling_factor = reply_ranking / ranking_sum
+        aggregate_reply_score += reply_scaling_factor * analyze_comment(reply)
+
+      polarity += COMMENT_CHILDREN_WEIGHT * aggregate_reply_score
+
   return polarity
 
+@functools.lru_cache(maxsize=None)
 def analyze_sentence(sentence):
   sentiments = []
 
