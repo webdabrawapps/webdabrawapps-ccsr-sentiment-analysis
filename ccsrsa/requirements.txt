@@ -1,4 +1,0 @@
-numpy==1.12.1
-praw==5.3.0
-textblob=0.15.0
-vaderSentiment==2.5
