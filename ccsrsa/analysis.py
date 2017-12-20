@@ -41,7 +41,6 @@ def _get_comment_ranking(cmt):
   return cmt.score
 
 def analyze_subreddit(subreddit):
-
   polarity = 0
 
   top_submissions = subreddit.hot(limit=NUM_SUBMISSIONS_TO_CONSIDER)
@@ -65,6 +64,8 @@ def analyze_submission(submission):
   top_level_comment_rankings = {cmt: _get_comment_ranking(cmt) for cmt in top_level_comments}
   ranking_sum = sum(top_level_comment_rankings.values())
   aggregate_comment_score = 0
+
+  logging.info('Parsing {0} top level comments.'.format(len(top_level_comments)))
 
   for comment, comment_ranking in top_level_comment_rankings.items():
     comment_scaling_factor = comment_ranking / ranking_sum
