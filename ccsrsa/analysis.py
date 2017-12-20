@@ -1,6 +1,7 @@
 
+__version__ = '0.0.1'
+
 import praw
-import nltk
 import json
 import numpy as np
 import logging
