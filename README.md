@@ -2,7 +2,7 @@
 
 ![Sample](https://raw.githubusercontent.com/dmhacker/ccsr-sentiment-analysis/master/sample.png)
 
-<sub><sup>Average sentiments expressed by various subreddits as of 12/20/2017. Notice how /r/Bitcoin and /r/btc are lower: that day, Coinbase added Bitcoin Cash rather than implementing Segwit.</sup></sub>
+<sub><sup>Average sentiments expressed by various subreddits as of 12/20/2017. Notice how /r/Bitcoin and /r/btc are more negative: that day, Coinbase added Bitcoin Cash rather than implementing Segwit to free up network congestion.</sup></sub>
 
 __ccsr-sentiment-analysis__ quantifies the immediate mood of popular cryptocurrency subreddits using SOTA sentiment analysis.
 
