@@ -6,6 +6,7 @@ PRAW_CONFIG_FILE = 'config.json'
 CRYPTOCURRENCY_SUBREDDITS = [
   'Augur',
   'ArkEcosystem',
+  'btc',
   'Bitcoin',
   'BitcoinCash',
   'DashPay',
