@@ -1,6 +1,6 @@
 # ccsr-sentiment-analysis
 
-![Sample](https://github.com/dmhacker/ccsr-sentiment-analysis/blob/master/ccsr-sentiment-analysis/sample.png)
+![Sample](https://raw.githubusercontent.com/dmhacker/ccsr-sentiment-analysis/master/sample.png)
 
 <sub><sup>Average sentiments expressed by various subreddits as of 12/20/2017.</sup></sub>
 
