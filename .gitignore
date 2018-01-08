@@ -1,5 +1,7 @@
 # ccsr-sentiment-analysis
+stanford-corenlp-*
 config.json
+word2vec.h5
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

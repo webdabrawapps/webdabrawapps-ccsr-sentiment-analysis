@@ -6,13 +6,20 @@ import json
 import numpy as np
 import logging
 import functools
+import os
 
 from datetime import datetime
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from pycorenlp import StanfordCoreNLP
+from gensim.models import Word2Vec
+from nltk import tokenize
 from pprint import pprint
 from constants import *
 
-vader_analyzer = SentimentIntensityAnalyzer()
+vader_analyzer = None
+stanford_nlp = None
+word2vec_model = None
+reddit = None
 
 def main():
   '''
@@ -20,8 +27,7 @@ def main():
   '''
   logging.basicConfig(format='[%(asctime)s] [%(levelname)s] %(message)s',level=logging.INFO)
 
-  reddit_config = json.load(open(PRAW_CONFIG_FILE))
-  reddit = praw.Reddit(**reddit_config)
+  _load_globals()
 
   subreddit_polarities = {}
 
@@ -30,6 +36,51 @@ def main():
     subreddit_polarities[subreddit] = analyze_subreddit(subreddit)
 
   pprint(subreddit_polarities)
+
+def _load_globals():
+  global vader_analyzer, stanford_nlp, word2vec_model, reddit
+  reddit_config = json.load(open(PRAW_CONFIG_FILE))
+  reddit = praw.Reddit(**reddit_config)
+  vader_analyzer = SentimentIntensityAnalyzer()
+  stanford_nlp = StanfordCoreNLP(STANFORD_CORENLP_SERVER)
+  word2vec_model = _get_word2vec()
+
+  print(word2vec_model.wv.most_similar(positive=['Bitcoin']))
+
+def _get_word2vec():
+  if os.path.isfile(WORD2VEC_MODEL_FILE):
+    logging.info('Loading word2vec model from file {0} ...'.format(WORD2VEC_MODEL_FILE))
+    return Word2Vec.load(WORD2VEC_MODEL_FILE)
+
+  word_tokenizer = tokenize.TweetTokenizer()
+  sentences = []
+
+  def parse_comment(comment, subreddit_sentences):
+    subreddit_sentences.append(word_tokenizer.tokenize(comment.body))
+    for reply in comment.replies:
+      parse_comment(reply, subreddit_sentences)
+
+  for ccsr in CRYPTOCURRENCY_SUBREDDITS:
+    logging.info("Compiling submission titles and comments from subreddit '{0}' ...".format(ccsr))
+    subreddit = reddit.subreddit(ccsr)
+    subreddit_sentences = []
+    for submission in subreddit.top(limit=10000):
+
+      logging.info("Looking at submission '{0}'".format(submission.title))
+      subreddit_sentences.append(word_tokenizer.tokenize(submission.title))
+      submission.comments.replace_more(limit=0)
+      for comment in submission.comments:
+        parse_comment(comment, subreddit_sentences)
+
+      logging.info("Collected {0} sentences ... {1} in training set.".format(len(subreddit_sentences), len(subreddit_sentences) + len(sentences)))
+      if len(subreddit_sentences) > 50000:
+        sentences.extend(subreddit_sentences)
+        break
+
+  logging.info('Training model on {0} sentences ...'.format(len(sentences)))
+  model = Word2Vec(sentences, size=200, window=5, min_count=5, workers=4)
+  model.save(WORD2VEC_MODEL_FILE)
+  return model
 
 b = np.power(ONE_MONTH_WEIGHT_DEPRECIATION, -1 / ONE_MONTH_DAYS)
 a = 1 / np.power(b, MAX_ELAPSED_DAYS)
@@ -93,7 +144,7 @@ def analyze_submission(submission):
   :param submission: The praw submission object
   :return: The polarity of the submission
   '''
-  polarity = analyze_sentence(submission.title)
+  polarity = analyze_text(submission.title)
 
   submission.comments.replace_more(limit=0)
 
@@ -123,7 +174,7 @@ def analyze_comment(comment):
   :param comment: The praw comment object
   :return: The polarity of the comment
   '''
-  polarity = analyze_sentence(comment.body)
+  polarity = analyze_text(comment.body)
 
   comment.replies.replace_more(limit=0)
 
@@ -145,18 +196,29 @@ def analyze_comment(comment):
   return polarity
 
 @functools.lru_cache(maxsize=None)
-def analyze_sentence(sentence):
+def analyze_text(text):
   '''
   Determines the polarity of the given text. Uses the VADER sentiment
   analyzer. TODO: Consider using other sentiment analyzers.
 
-  :param sentence: The sentence to analyze
-  :return: The polarity of the sentence (-1 for negativity, +1 for positivity)
+  :param text: The text to analyze
+  :return: The overall polarity of the text OR -2 if the text does not pertain to the given subject
   '''
-  sentiments = []
+  stanford_nlp_output = stanford_nlp.annotate(text, properties={
+    'annotators': 'tokenize,ssplit,pos,depparse,parse',
+    'outputFormat': 'json'
+  })
+  for sentence in stanford_nlp_output['sentences']:
 
-  vader_polarity_scores = vader_analyzer.polarity_scores(sentence)
-  sentiments.append(vader_polarity_scores['pos'] - vader_polarity_scores['neg'])
+    tokens = sentence['tokens']
+    full_sentence = ' '.join([token['originalText'] for token in tokens])
+    nouns = [token['word'] for token in tokens if 'NN' in token['pos']]
+    print(nouns)
+
+    sentiments = []
+
+    vader_polarity_scores = vader_analyzer.polarity_scores(full_sentence)
+    sentiments.append(vader_polarity_scores['pos'] - vader_polarity_scores['neg'])
 
   return np.mean(sentiments)
 

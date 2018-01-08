@@ -2,7 +2,10 @@
 from datetime import datetime
 import numpy as np
 
+WORD2VEC_MODEL_FILE = 'word2vec.h5'
+STANFORD_CORENLP_SERVER = 'http://localhost:9000'
 PRAW_CONFIG_FILE = 'config.json'
+
 CRYPTOCURRENCY_SUBREDDITS = [
   'Augur',
   'ArkEcosystem',
